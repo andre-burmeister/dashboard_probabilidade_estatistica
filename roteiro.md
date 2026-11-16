@@ -31,9 +31,9 @@ A unidade amostral é o curso presencial de graduação com ao menos uma matríc
 
 ### 0:35 — Tamanho e sorteio da amostra
 
-Calculei o tamanho para uma proporção, com confiança de 95%, margem de 4 pontos percentuais e proporção de planejamento de 50%, que maximiza a variância. Com a correção de população finita, o sorteio sem reposição pede 590 cursos.
+O tamanho da amostra foi calculado para uma confiança de 95%, margem de erro de 4% e proporção de planejamento de 50%, para maximizar a variância. Isso gera uma amostra de 590 cursos.
 
-Escolhi essa margem para deixar a variabilidade visível. A seleção é uma amostra aleatória simples no NumPy, semente 2024, sem reposição. Cada curso tem a mesma chance, e a mesma amostra serve às quatro inferências.
+A seleção é uma amostra aleatória simples no NumPy, usando sempre a mesma semente (2024). A mesma amostra serve às quatro inferências.
 
 ### 1:10 — População e amostra
 
