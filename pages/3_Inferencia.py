@@ -113,6 +113,7 @@ def _detalhe(resultado):
 
 primeira_proporcao = True
 for resultado in resultados:
+    markdown(f"### {resultado['nome']}")
     formato, titulo = _formato_grafico(resultado)
     mostrar(grafico_intervalos([resultado], resultado["valor_nulo"], formato, titulo))
     explicar = resultado["tipo"] == "proporcao" and primeira_proporcao
@@ -120,8 +121,6 @@ for resultado in resultados:
     if explicar:
         primeira_proporcao = False
     markdown(f"""
-        ### {resultado['nome']}
-
         **{resultado['pergunta']}**
 
         {resultado['justificativa']}
