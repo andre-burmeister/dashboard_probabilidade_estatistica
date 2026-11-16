@@ -33,8 +33,26 @@ COLUNAS_CSV = [
     "NO_CINE_AREA_GERAL",
     "TP_GRAU_ACADEMICO",
     "QT_MAT",
-    "QT_VG_TOTAL",
-    "QT_INSCRITO_TOTAL",
+    "QT_MAT_FEM",
+    "QT_MAT_PRETA",
+    "QT_MAT_PARDA",
+    "QT_MAT_CORND",
+    "QT_ING",
+    "QT_ING_25_29",
+    "QT_ING_30_34",
+    "QT_ING_35_39",
+    "QT_ING_40_49",
+    "QT_ING_50_59",
+    "QT_ING_60_MAIS",
+]
+
+FAIXAS_25_MAIS = [
+    "QT_ING_25_29",
+    "QT_ING_30_34",
+    "QT_ING_35_39",
+    "QT_ING_40_49",
+    "QT_ING_50_59",
+    "QT_ING_60_MAIS",
 ]
 
 ORGANIZACAO = {
@@ -75,22 +93,43 @@ def preparar():
         usecols=COLUNAS_CSV,
         low_memory=False,
     )
-    presencial = (
-        bruto["TP_MODALIDADE_ENSINO"].eq(1)
-        & bruto["QT_MAT"].gt(0)
-        & bruto["QT_VG_TOTAL"].gt(0)
-    )
+    presencial = bruto["TP_MODALIDADE_ENSINO"].eq(1) & bruto["QT_MAT"].gt(0)
     populacao = bruto.loc[presencial].copy()
     if populacao["CO_CURSO"].duplicated().any():
         raise ValueError("Há curso presencial repetido. A unidade amostral deixaria de ser o curso.")
     if populacao["IN_CAPITAL"].isna().any():
         raise ValueError("Há curso presencial sem o indicador de capital.")
+    if populacao["QT_MAT_FEM"].isna().any():
+        raise ValueError("Há curso presencial sem a contagem de mulheres.")
 
-    populacao["QT_INSCRITO_TOTAL"] = populacao["QT_INSCRITO_TOTAL"].fillna(0)
-    populacao["inscritos_por_vaga"] = (
-        populacao["QT_INSCRITO_TOTAL"] / populacao["QT_VG_TOTAL"]
+    populacao["proporcao_mulheres"] = populacao["QT_MAT_FEM"] / populacao["QT_MAT"]
+    if populacao["proporcao_mulheres"].lt(0).any() or populacao["proporcao_mulheres"].gt(1).any():
+        raise ValueError("A proporção de mulheres saiu do intervalo de 0 a 1.")
+    colunas_composicao = ["QT_ING", *FAIXAS_25_MAIS, "QT_MAT_PRETA", "QT_MAT_PARDA", "QT_MAT_CORND"]
+    faltantes = [coluna for coluna in colunas_composicao if populacao[coluna].isna().any()]
+    if faltantes:
+        raise ValueError(f"Há curso presencial sem {', '.join(faltantes)}.")
+    com_ingresso = populacao["QT_ING"].gt(0)
+    populacao["proporcao_25_mais"] = pd.Series(pd.NA, index=populacao.index, dtype="Float64")
+    populacao.loc[com_ingresso, "proporcao_25_mais"] = (
+        populacao.loc[com_ingresso, FAIXAS_25_MAIS].sum(axis=1) / populacao.loc[com_ingresso, "QT_ING"]
     )
+    declarada = populacao["QT_MAT"] - populacao["QT_MAT_CORND"]
+    if declarada.lt(0).any():
+        raise ValueError("Há curso com mais matrículas sem cor do que matrículas.")
+    com_cor = declarada.gt(0)
+    populacao["proporcao_preta_parda"] = pd.Series(pd.NA, index=populacao.index, dtype="Float64")
+    populacao.loc[com_cor, "proporcao_preta_parda"] = (
+        populacao.loc[com_cor, "QT_MAT_PRETA"] + populacao.loc[com_cor, "QT_MAT_PARDA"]
+    ) / declarada.loc[com_cor]
+    for coluna in ("proporcao_25_mais", "proporcao_preta_parda"):
+        serie = populacao[coluna].dropna()
+        if serie.lt(0).any() or serie.gt(1).any():
+            raise ValueError(f"{coluna} saiu do intervalo de 0 a 1.")
     populacao["licenciatura"] = populacao["TP_GRAU_ACADEMICO"].eq(2)
+    populacao["licenciatura_curso"] = populacao["licenciatura"].map(
+        {True: "Licenciatura", False: "Outro grau"}
+    )
     populacao["gratuito"] = populacao["IN_GRATUITO"].eq(1)
     populacao["categoria"] = _rotulo(populacao["TP_CATEGORIA_ADMINISTRATIVA"], CATEGORIA)
     populacao["organizacao"] = _rotulo(populacao["TP_ORGANIZACAO_ACADEMICA"], ORGANIZACAO)
@@ -115,11 +154,13 @@ def preparar():
         "area",
         "local",
         "licenciatura",
+        "licenciatura_curso",
         "gratuito",
         "QT_MAT",
-        "QT_VG_TOTAL",
-        "QT_INSCRITO_TOTAL",
-        "inscritos_por_vaga",
+        "QT_MAT_FEM",
+        "proporcao_mulheres",
+        "proporcao_25_mais",
+        "proporcao_preta_parda",
     ]
     populacao = populacao[colunas].reset_index(drop=True)
     CAMINHO_PARQUET.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +189,6 @@ if __name__ == "__main__":
         round(float(cursos["gratuito"].mean()), 4),
         "matriculas",
         round(float(cursos["QT_MAT"].mean()), 2),
-        "inscritos_por_vaga",
-        round(float(cursos["inscritos_por_vaga"].mean()), 3),
+        "proporcao_mulheres",
+        round(float(cursos["proporcao_mulheres"].mean()), 4),
     )

@@ -11,7 +11,7 @@ import preparar_dados
 
 CONFIANCA = 0.95
 Z = float(stats.norm.ppf((1 + CONFIANCA) / 2))
-ERRO = 0.02
+ERRO = 0.04
 P_PLANEJAMENTO = 0.50
 SEMENTE = 2024
 ALPHA = 0.05
@@ -29,15 +29,17 @@ HIPOTESES = [
         "coluna": "licenciatura",
         "tipo": "proporcao",
         "nome": "Licenciatura",
-        "pergunta": "A proporção de cursos de licenciatura é 50%?",
+        "pergunta": "A proporção de cursos de licenciatura é 20%?",
         "justificativa": (
-            "A hipótese nula divide a oferta ao meio entre licenciaturas e os "
-            "demais graus, bacharelado e tecnológico. A alternativa é bilateral."
+            "A hipótese nula fixa a proporção de licenciaturas em 20%. "
+            "A alternativa é bilateral: $H_0$ é rejeitada se a proporção amostral "
+            "ficar suficientemente acima ou abaixo de 20%."
         ),
-        "valor_nulo": 0.50,
-        "h0": r"$p = 0{,}50$",
-        "h1": r"$p \neq 0{,}50$",
-        "texto_nulo": "50%",
+        "valor_nulo": 0.20,
+        "h0": r"$p = 0{,}20$",
+        "h1": r"$p \neq 0{,}20$",
+        "texto_nulo": "20%",
+        "lado": "bilateral",
         "percentual": True,
         "casas": 2,
         "unidade": "",
@@ -47,15 +49,17 @@ HIPOTESES = [
         "coluna": "gratuito",
         "tipo": "proporcao",
         "nome": "Curso gratuito",
-        "pergunta": "A proporção de cursos gratuitos é 50%?",
+        "pergunta": "A proporção de cursos gratuitos é 30%?",
         "justificativa": (
-            "A hipótese nula divide a oferta ao meio entre cursos gratuitos e pagos. "
-            "A alternativa é bilateral."
+            "A hipótese nula fixa a proporção de cursos gratuitos em 30%. "
+            "A alternativa é bilateral: $H_0$ é rejeitada se a proporção amostral "
+            "ficar suficientemente acima ou abaixo de 30%."
         ),
-        "valor_nulo": 0.50,
-        "h0": r"$p = 0{,}50$",
-        "h1": r"$p \neq 0{,}50$",
-        "texto_nulo": "50%",
+        "valor_nulo": 0.30,
+        "h0": r"$p = 0{,}30$",
+        "h1": r"$p \neq 0{,}30$",
+        "texto_nulo": "30%",
+        "lado": "bilateral",
         "percentual": True,
         "casas": 2,
         "unidade": "",
@@ -65,55 +69,86 @@ HIPOTESES = [
         "coluna": "QT_MAT",
         "tipo": "media",
         "nome": "Matrículas no curso",
-        "pergunta": "O curso presencial tem, em média, 100 matrículas?",
+        "pergunta": "O número médio de matrículas está abaixo de 150?",
         "justificativa": (
-            "Cem matrículas é uma referência redonda, próxima da mediana. "
-            "A hipótese pergunta se a média, sensível aos cursos grandes, fica nesse patamar. "
-            "A alternativa é bilateral."
+            "A hipótese nula afirma que o curso presencial tem, em média, menos de 150 matrículas. "
+            "A alternativa é que a média é de pelo menos 150. "
+            "O teste é unilateral e usa o limite 150: $H_0$ só é rejeitada se a média amostral "
+            "ficar suficientemente acima desse valor."
         ),
-        "valor_nulo": 100,
-        "h0": r"$\mu = 100$",
-        "h1": r"$\mu \neq 100$",
-        "texto_nulo": "100 matrículas",
+        "valor_nulo": 150,
+        "h0": r"$\mu < 150$",
+        "h1": r"$\mu \geq 150$",
+        "texto_nulo": "150 matrículas",
+        "lado": "maior",
         "percentual": False,
         "casas": 1,
         "unidade": "matrículas",
     },
     {
-        "id": "inscritos_por_vaga",
-        "coluna": "inscritos_por_vaga",
+        "id": "mulheres",
+        "coluna": "proporcao_mulheres",
         "tipo": "media",
-        "nome": "Inscritos por vaga",
-        "pergunta": "Há, em média, 1 inscrito por vaga?",
+        "nome": "Proporção de mulheres",
+        "pergunta": "O curso presencial tem, em média, metade das matrículas de mulheres?",
         "justificativa": (
-            "Um inscrito por vaga é o equilíbrio entre a procura e a oferta do curso. "
-            "A média usa os inscritos divididos pelas vagas de cada curso. "
+            "Metade é a paridade entre mulheres e homens nas matrículas do curso. "
+            "A média usa QT_MAT_FEM / QT_MAT, e cada curso pesa igual. "
             "A alternativa é bilateral."
         ),
-        "valor_nulo": 1,
-        "h0": r"$\mu = 1$",
-        "h1": r"$\mu \neq 1$",
-        "texto_nulo": "1 inscrito por vaga",
-        "percentual": False,
-        "casas": 2,
-        "unidade": "inscritos por vaga",
+        "valor_nulo": 0.50,
+        "h0": r"$\mu = 0{,}50$",
+        "h1": r"$\mu \neq 0{,}50$",
+        "texto_nulo": "50%",
+        "lado": "bilateral",
+        "percentual": True,
+        "casas": 1,
+        "unidade": "pontos percentuais",
     },
 ]
 
 QUALITATIVAS = [
-    ("categoria", "Categoria administrativa"),
-    ("organizacao", "Organização acadêmica"),
-    ("rede", "Rede"),
+    ("licenciatura_curso", "Licenciatura"),
     ("gratuidade", "Gratuidade"),
-    ("grau", "Grau acadêmico"),
+]
+
+QUALITATIVAS_EXTRA = [
     ("area", "Área do conhecimento"),
-    ("local", "Localização"),
-    ("NO_UF", "Unidade federativa"),
+    ("grau", "Grau acadêmico"),
+    ("organizacao", "Organização acadêmica"),
 ]
 
 QUANTITATIVAS = [
     {"coluna": "QT_MAT", "nome": "Matrículas no curso", "casas": 1, "casas_mediana": 0},
-    {"coluna": "inscritos_por_vaga", "nome": "Inscritos por vaga", "casas": 2, "casas_mediana": 2},
+    {
+        "coluna": "proporcao_mulheres",
+        "nome": "Proporção de mulheres",
+        "casas": 1,
+        "casas_mediana": 1,
+        "percentual": True,
+        "teto": 1,
+    },
+]
+
+QUANTITATIVAS_EXTRA = [
+    {
+        "coluna": "proporcao_25_mais",
+        "nome": "Ingressantes com 25 anos ou mais",
+        "casas": 1,
+        "casas_mediana": 1,
+        "percentual": True,
+        "teto": 1,
+        "motivo": "não houve ingressante em 2024",
+    },
+    {
+        "coluna": "proporcao_preta_parda",
+        "nome": "Pretos ou pardos nas matrículas",
+        "casas": 1,
+        "casas_mediana": 1,
+        "percentual": True,
+        "teto": 1,
+        "motivo": "nenhuma matrícula tem cor declarada",
+    },
 ]
 
 
@@ -172,7 +207,7 @@ def frequencia(dados, coluna):
 
 
 def medidas(dados, coluna):
-    serie = dados[coluna].astype(float)
+    serie = dados[coluna].dropna().astype(float)
     return {
         "media": float(serie.mean()),
         "mediana": float(serie.median()),
@@ -183,9 +218,33 @@ def medidas(dados, coluna):
     }
 
 
-def _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo):
-    populacao_difere = abs(parametro - valor_nulo) > 1e-9
+def _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo, lado="bilateral"):
     rejeita = valor_p < alpha
+    if lado == "maior":
+        h0_verdadeira = parametro < valor_nulo
+        if h0_verdadeira and rejeita:
+            acordo = (
+                f"Na população a média está abaixo de {texto_nulo} e o teste rejeitou $H_0$. "
+                "Esta amostra produziu um falso positivo."
+            )
+        elif h0_verdadeira and not rejeita:
+            acordo = (
+                f"Na população a média está abaixo de {texto_nulo} "
+                "e o teste não rejeitou $H_0$."
+            )
+        elif rejeita:
+            acordo = (
+                f"Na população a média não está abaixo de {texto_nulo}. "
+                "A decisão do teste coincide com o parâmetro populacional."
+            )
+        else:
+            acordo = (
+                f"Na população a média não está abaixo de {texto_nulo}, "
+                "mas esta amostra não rejeitou $H_0$. "
+                "A diferença ficou dentro da variabilidade amostral."
+            )
+        return rejeita, acordo
+    populacao_difere = abs(parametro - valor_nulo) > 1e-9
     if populacao_difere and rejeita:
         acordo = (
             f"A população também difere de {texto_nulo}. "
@@ -206,7 +265,7 @@ def _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo):
     return rejeita, acordo
 
 
-def inferir_proporcao(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=ALPHA, z=Z, texto_nulo="50%"):
+def inferir_proporcao(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=ALPHA, z=Z, texto_nulo="50%", lado="bilateral"):
     """Intervalo de Wald e teste z bilateral, com população finita."""
     tamanho_populacao = len(populacao)
     tamanho_amostra = len(amostra)
@@ -220,7 +279,7 @@ def inferir_proporcao(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=A
     superior = estimativa + z * erro_padrao
     estatistica = (estimativa - valor_nulo) / erro_padrao_h0
     valor_p = float(min(1.0, 2 * stats.norm.sf(abs(estatistica))))
-    rejeita, acordo = _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo)
+    rejeita, acordo = _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo, lado)
     n_p = tamanho_amostra * estimativa
     n_q = tamanho_amostra * (1 - estimativa)
     n_p0 = tamanho_amostra * valor_nulo
@@ -262,8 +321,8 @@ def inferir_proporcao(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=A
     }
 
 
-def inferir_media(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=ALPHA, texto_nulo=""):
-    """Intervalo t e teste t bilateral, com população finita no erro-padrão."""
+def inferir_media(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=ALPHA, texto_nulo="", lado="bilateral"):
+    """Intervalo t bilateral e teste t, com população finita no erro-padrão."""
     tamanho_populacao = len(populacao)
     valores = amostra[coluna].to_numpy(dtype=float)
     tamanho_amostra = len(valores)
@@ -273,12 +332,20 @@ def inferir_media(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=ALPHA
     fpc = fator_finito(tamanho_populacao, tamanho_amostra)
     graus = tamanho_amostra - 1
     erro_padrao = float(desvio / np.sqrt(tamanho_amostra) * fpc)
-    critico = float(stats.t.ppf(1 - alpha / 2, graus))
-    inferior = estimativa - critico * erro_padrao
-    superior = estimativa + critico * erro_padrao
+    critico_intervalo = float(stats.t.ppf(1 - alpha / 2, graus))
+    inferior = estimativa - critico_intervalo * erro_padrao
+    superior = estimativa + critico_intervalo * erro_padrao
     estatistica = (estimativa - valor_nulo) / erro_padrao
-    valor_p = float(min(1.0, 2 * stats.t.sf(abs(estatistica), graus)))
-    rejeita, acordo = _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo)
+    if lado == "maior":
+        valor_p = float(stats.t.sf(estatistica, graus))
+        critico = float(stats.t.ppf(1 - alpha, graus))
+    elif lado == "menor":
+        valor_p = float(stats.t.cdf(estatistica, graus))
+        critico = float(stats.t.ppf(alpha, graus))
+    else:
+        valor_p = float(min(1.0, 2 * stats.t.sf(abs(estatistica), graus)))
+        critico = critico_intervalo
+    rejeita, acordo = _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo, lado)
     assimetria = float(pd.Series(valores).skew())
     return {
         "tipo": "media",
@@ -308,7 +375,11 @@ def inferir_media(populacao, amostra, coluna, valor_nulo=VALOR_NULO, alpha=ALPHA
             f"A amostra tem {formatar_inteiro(tamanho_amostra)} cursos e a assimetria amostral é "
             f"{formatar_decimal(assimetria, 2)}. "
             "Com esse tamanho, a média amostral se aproxima da normal e o intervalo $t$ se aplica. "
-            "Se a assimetria é alta, a média fica acima da mediana."
+            + (
+                "A assimetria é moderada, e a média fica perto da mediana."
+                if abs(assimetria) < 1
+                else "A assimetria é alta, e a média se afasta da mediana."
+            )
         ),
     }
 
@@ -324,6 +395,7 @@ def inferir(populacao, amostra):
                 hipotese["coluna"],
                 valor_nulo=hipotese["valor_nulo"],
                 texto_nulo=hipotese["texto_nulo"],
+                lado=hipotese.get("lado", "bilateral"),
             )
         else:
             resultado = inferir_media(
@@ -332,6 +404,7 @@ def inferir(populacao, amostra):
                 hipotese["coluna"],
                 valor_nulo=hipotese["valor_nulo"],
                 texto_nulo=hipotese["texto_nulo"],
+                lado=hipotese.get("lado", "bilateral"),
             )
         resultado.update(
             {
@@ -343,6 +416,7 @@ def inferir(populacao, amostra):
                 "h1": hipotese["h1"],
                 "valor_nulo": hipotese["valor_nulo"],
                 "texto_nulo": hipotese["texto_nulo"],
+                "lado": hipotese.get("lado", "bilateral"),
                 "percentual": hipotese["percentual"],
                 "casas": hipotese["casas"],
                 "unidade": hipotese["unidade"],

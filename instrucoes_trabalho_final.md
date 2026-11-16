@@ -38,11 +38,15 @@ Deverão ser construídos três painéis interativos, utilizando uma ferramenta 
 ### Painel 1 — Análise descritiva da população
 Apresentar uma visão geral da população, incluindo:
 
-- Indicadores descritivos relevantes;
+- Indicadores descritivos relevantes; 
+    - Número de cursos
+    - Número de instituições
+    - Número total de matriculados
+
 - Distribuições das variáveis selecionadas;
 - Gráficos adequados aos tipos de variáveis;
 - Frequências e proporções para variáveis qualitativas;
-- Medidas descritivas, como média, mediana, desvio-padrão e outras pertinentes às variáveis quantitativas.
+- Medidas descritivas, como média, mediana, desvio-padrão e outras pertinentes às variáveis quantitativas. (box plot?)
 
 
 ### Painel 2 — Análise descritiva da amostra

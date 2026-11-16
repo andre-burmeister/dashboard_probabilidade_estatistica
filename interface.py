@@ -97,8 +97,14 @@ def aplicar_estilo():
     st.markdown(ESTILO, unsafe_allow_html=True)
 
 
-@st.cache_data
 def carregar_estudo():
+    caminho = analise.preparar_dados.CAMINHO_PARQUET
+    versao = caminho.stat().st_mtime_ns if caminho.exists() else 0
+    return _carregar_estudo(versao)
+
+
+@st.cache_data
+def _carregar_estudo(_versao):
     populacao, metadados = analise.carregar_populacao()
     plano = analise.tamanho_amostral(len(populacao))
     amostra = analise.amostrar(populacao, plano["n"])
@@ -114,7 +120,7 @@ def _configurar(grafico):
             titleFontSize=13,
             labelColor=COR_TEXTO,
             titleColor=COR_TEXTO,
-            labelLimit=280,
+            labelLimit=520,
             gridColor="#e6e0d6",
             domainColor="#4e4842",
             tickColor="#4e4842",
@@ -190,20 +196,35 @@ def grafico_barras_comparacao(longo, coluna, titulo):
 
 def _faixas(serie, limite, bins=30):
     """Conta a proporção dos cursos em cada faixa. Valores acima do limite ficam de fora."""
-    contagem, bordas = np.histogram(serie, bins=bins, range=(0, limite))
-    return bordas[:-1], bordas[1:], contagem / len(serie)
+    valores = pd.Series(serie).dropna().astype(float).to_numpy()
+    contagem, bordas = np.histogram(valores, bins=bins, range=(0, limite))
+    return bordas[:-1], bordas[1:], contagem / len(valores)
+
+
+def _spec(coluna):
+    for variavel in analise.QUANTITATIVAS + analise.QUANTITATIVAS_EXTRA:
+        if variavel["coluna"] == coluna:
+            return variavel
+    return {}
 
 
 def _formato_eixo(coluna):
+    if _spec(coluna).get("percentual"):
+        return ".0%"
     if coluna == "QT_MAT":
         return ",.0f"
-    if coluna == "inscritos_por_vaga":
-        return ",.1f"
-    return ".0%"
+    return ",.1f"
+
+
+def _limite_histograma(dados, coluna):
+    teto = _spec(coluna).get("teto")
+    if teto is not None:
+        return float(teto)
+    return float(dados[coluna].quantile(0.99))
 
 
 def grafico_histograma(dados, coluna, titulo, eixo_x):
-    limite = float(dados[coluna].quantile(0.99))
+    limite = _limite_histograma(dados, coluna)
     inicio, fim, proporcao = _faixas(dados[coluna].astype(float), limite)
     plot = pd.DataFrame({"inicio": inicio, "fim": fim, "proporcao": proporcao})
     formato = _formato_eixo(coluna)
@@ -214,6 +235,7 @@ def grafico_histograma(dados, coluna, titulo, eixo_x):
             x=alt.X("inicio:Q", title=eixo_x, axis=alt.Axis(format=formato)),
             x2="fim:Q",
             y=alt.Y("proporcao:Q", title="Proporção dos cursos", axis=alt.Axis(format="%")),
+            y2=alt.datum(0),
             tooltip=[
                 alt.Tooltip("inicio:Q", title="De", format=formato),
                 alt.Tooltip("fim:Q", title="Até", format=formato),
@@ -226,14 +248,15 @@ def grafico_histograma(dados, coluna, titulo, eixo_x):
 
 
 def grafico_histograma_comparacao(populacao, amostra, coluna, titulo, eixo_x):
-    limite = float(populacao[coluna].quantile(0.99))
+    limite = _limite_histograma(populacao, coluna)
     quadros = []
     for grupo, dados in (("População", populacao), ("Amostra", amostra)):
         inicio, fim, proporcao = _faixas(dados[coluna].astype(float), limite)
         quadros.append(
             pd.DataFrame(
                 {
-                    "centro": (inicio + fim) / 2,
+                    "inicio": inicio,
+                    "fim": fim,
                     "proporcao": proporcao,
                     "grupo": grupo,
                 }
@@ -243,14 +266,17 @@ def grafico_histograma_comparacao(populacao, amostra, coluna, titulo, eixo_x):
     formato = _formato_eixo(coluna)
     grafico = (
         alt.Chart(plot)
-        .mark_line(interpolate="step", strokeWidth=2)
+        .mark_bar(opacity=0.55)
         .encode(
-            x=alt.X("centro:Q", title=eixo_x, axis=alt.Axis(format=formato)),
+            x=alt.X("inicio:Q", title=eixo_x, axis=alt.Axis(format=formato)),
+            x2="fim:Q",
             y=alt.Y("proporcao:Q", title="Proporção dos cursos", axis=alt.Axis(format="%")),
+            y2=alt.datum(0),
             color=alt.Color("grupo:N", title=None, scale=_escala_grupo()),
             tooltip=[
                 alt.Tooltip("grupo:N", title="Grupo"),
-                alt.Tooltip("centro:Q", title=eixo_x, format=formato),
+                alt.Tooltip("inicio:Q", title="De", format=formato),
+                alt.Tooltip("fim:Q", title="Até", format=formato),
                 alt.Tooltip("proporcao:Q", title="Proporção", format=".1%"),
             ],
         )
@@ -260,15 +286,21 @@ def grafico_histograma_comparacao(populacao, amostra, coluna, titulo, eixo_x):
 
 
 def nota_cauda(dados, coluna, nome, referencia=None):
+    if _spec(coluna).get("teto") is not None:
+        return ""
     base = referencia if referencia is not None else dados
     limite = float(base[coluna].quantile(0.99))
     acima = int((dados[coluna] > limite).sum())
     if acima == 0:
         return ""
+    if acima == 1:
+        fora = "1 curso deste grupo fica acima disso"
+    else:
+        fora = f"{analise.formatar_inteiro(acima)} cursos deste grupo ficam acima disso"
     return em_markdown(f"""
         O eixo de {nome[0].lower()}{nome[1:]} vai até o percentil 99 da população
         ({analise.formatar_decimal(limite, 1)}).
-        {analise.formatar_inteiro(acima)} cursos deste grupo ficam acima disso;
+        {fora};
         o maior valor é {analise.formatar_decimal(dados[coluna].max(), 1)}.
     """)
 
@@ -313,25 +345,36 @@ def grafico_intervalos(resultados, valor_nulo, formato, titulo_eixo):
         .encode(x=alt.X("valor:Q", scale=escala))
     )
     grafico = (nulo + intervalo + estimativa + populacao).properties(
-        title="Estimativa, intervalo de 95% e parâmetro populacional",
+        title=(
+            "Estimativa, intervalo de "
+            f"{analise.formatar_percentual(analise.CONFIANCA, 0)} e parâmetro populacional"
+        ),
         height=alt.Step(46),
         width="container",
     )
     return _configurar(grafico)
 
 
-def _tabela_medidas(dados):
+def _formatar_quantitativo(valor, variavel, casas):
+    if variavel.get("percentual"):
+        return analise.formatar_percentual(valor, casas)
+    return analise.formatar_decimal(valor, casas)
+
+
+def _tabela_medidas(dados, variaveis=None):
+    if variaveis is None:
+        variaveis = analise.QUANTITATIVAS
     linhas = []
-    for variavel in analise.QUANTITATIVAS:
+    for variavel in variaveis:
         item = analise.medidas(dados, variavel["coluna"])
         linhas.append(
             {
                 "Variável": variavel["nome"],
-                "Média": analise.formatar_decimal(item["media"], variavel["casas"]),
-                "Mediana": analise.formatar_decimal(item["mediana"], variavel["casas_mediana"]),
-                "Desvio-padrão": analise.formatar_decimal(item["desvio"], variavel["casas"]),
-                "Mínimo": analise.formatar_decimal(item["minimo"], variavel["casas_mediana"]),
-                "Máximo": analise.formatar_decimal(item["maximo"], variavel["casas"]),
+                "Média": _formatar_quantitativo(item["media"], variavel, variavel["casas"]),
+                "Mediana": _formatar_quantitativo(item["mediana"], variavel, variavel["casas_mediana"]),
+                "Desvio-padrão": _formatar_quantitativo(item["desvio"], variavel, variavel["casas"]),
+                "Mínimo": _formatar_quantitativo(item["minimo"], variavel, variavel["casas_mediana"]),
+                "Máximo": _formatar_quantitativo(item["maximo"], variavel, variavel["casas"]),
                 "Assimetria": analise.formatar_decimal(item["assimetria"], 2),
             }
         )
@@ -344,9 +387,16 @@ def _diferenca_numero(amostra, populacao, casas):
     return sinal + analise.formatar_decimal(valor, casas)
 
 
-def tabela_comparacao(amostra, populacao):
+def tabela_comparacao(amostra, populacao, quantitativas=None, proporcoes=None):
+    if quantitativas is None:
+        quantitativas = analise.QUANTITATIVAS
+    if proporcoes is None:
+        proporcoes = (
+            ("licenciatura", "Proporção de cursos de licenciatura"),
+            ("gratuito", "Proporção de cursos gratuitos"),
+        )
     linhas = []
-    for variavel in analise.QUANTITATIVAS:
+    for variavel in quantitativas:
         mp = analise.medidas(populacao, variavel["coluna"])
         ma = analise.medidas(amostra, variavel["coluna"])
         nome = variavel["nome"]
@@ -357,18 +407,19 @@ def tabela_comparacao(amostra, populacao):
         )
         for rotulo, chave, casas in pares:
             titulo = f"{rotulo} de {nome[0].lower()}{nome[1:]}"
+            if variavel.get("percentual"):
+                diferenca = analise.formatar_pontos(ma[chave] - mp[chave], casas)
+            else:
+                diferenca = _diferenca_numero(ma[chave], mp[chave], casas)
             linhas.append(
                 {
                     "Indicador": titulo,
-                    "População": analise.formatar_decimal(mp[chave], casas),
-                    "Amostra": analise.formatar_decimal(ma[chave], casas),
-                    "Diferença": _diferenca_numero(ma[chave], mp[chave], casas),
+                    "População": _formatar_quantitativo(mp[chave], variavel, casas),
+                    "Amostra": _formatar_quantitativo(ma[chave], variavel, casas),
+                    "Diferença": diferenca,
                 }
             )
-    for coluna, nome in (
-        ("licenciatura", "Proporção de cursos de licenciatura"),
-        ("gratuito", "Proporção de cursos gratuitos"),
-    ):
+    for coluna, nome in proporcoes:
         pop = float(populacao[coluna].mean())
         amo = float(amostra[coluna].mean())
         linhas.append(
@@ -422,8 +473,8 @@ def painel_populacao(populacao):
     matriculas = int(populacao["QT_MAT"].sum())
     media_mat = float(populacao["QT_MAT"].mean())
     mediana_mat = float(populacao["QT_MAT"].median())
-    media_vaga = float(populacao["inscritos_por_vaga"].mean())
-    mediana_vaga = float(populacao["inscritos_por_vaga"].median())
+    media_mulheres = float(populacao["proporcao_mulheres"].mean())
+    mediana_mulheres = float(populacao["proporcao_mulheres"].median())
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Cursos", analise.formatar_inteiro(len(populacao)))
     c2.metric("Matrículas", analise.formatar_inteiro(matriculas))
@@ -432,43 +483,151 @@ def painel_populacao(populacao):
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("Licenciatura", analise.formatar_percentual(populacao["licenciatura"].mean(), 1))
     c6.metric("Gratuitos", analise.formatar_percentual(populacao["gratuito"].mean(), 1))
-    c7.metric("Média de inscritos por vaga", analise.formatar_decimal(media_vaga, 2))
-    c8.metric("Mediana de inscritos por vaga", analise.formatar_decimal(mediana_vaga, 2))
+    c7.metric("Proporção média de mulheres", analise.formatar_percentual(media_mulheres, 1))
+    c8.metric("Proporção mediana de mulheres", analise.formatar_percentual(mediana_mulheres, 1))
     markdown("""
-        ### Variáveis quantitativas
+        ## Variáveis quantitativas da análise
 
+        Estas duas médias entram nos testes do painel de inferência.
         A média, a mediana e o desvio-padrão usam o curso como unidade.
         O número de matrículas é a contagem do censo.
-        Os inscritos por vaga são `QT_INSCRITO_TOTAL / QT_VG_TOTAL`.
-        Nas duas, a média fica acima da mediana porque alguns cursos são muito grandes
-        ou têm muitos inscritos para poucas vagas.
+        A proporção de mulheres é `QT_MAT_FEM / QT_MAT`, mostrada em percentagem.
+        O desvio-padrão dessa proporção está em pontos percentuais.
+        Nas matrículas, a média fica acima da mediana porque alguns cursos são muito grandes.
+        Na proporção de mulheres, a média fica um pouco abaixo da mediana.
+        Cada curso pesa igual nessa média, qualquer que seja o número de matrículas.
     """)
-    st.dataframe(_tabela_medidas(populacao), hide_index=True, width="stretch")
-    colunas = st.columns(2)
-    for coluna_tela, variavel in zip(colunas, analise.QUANTITATIVAS):
-        with coluna_tela:
-            mostrar(
-                grafico_histograma(
-                    populacao,
-                    variavel["coluna"],
-                    variavel["nome"],
-                    variavel["nome"],
-                )
-            )
-            st.caption(nota_cauda(populacao, variavel["coluna"], variavel["nome"]))
+    _bloco_quantitativo(populacao, analise.QUANTITATIVAS)
 
     markdown("""
-        ### Variáveis qualitativas
+        ## Variáveis qualitativas da análise
 
+        Estas duas proporções entram nos testes do painel de inferência.
+        Licenciatura separa os cursos de licenciatura dos demais graus.
+        Gratuidade separa curso gratuito e pago.
         As barras e as tabelas mostram a frequência e a proporção dos cursos.
     """)
-    _grades_qualitativas(populacao)
+    _grades_qualitativas(populacao, variaveis=analise.QUALITATIVAS)
+
+    markdown("""
+        ## Mais variáveis qualitativas relevantes
+
+        A área do conhecimento, o grau acadêmico e a organização acadêmica detalham a oferta.
+        O grau separa bacharelado, licenciatura e tecnológico.
+        Na seção anterior, a licenciatura junta os outros graus em uma categoria.
+    """)
+    _grades_qualitativas(populacao, variaveis=analise.QUALITATIVAS_EXTRA, com_tabela=False)
+
+    markdown("""
+        ## Mais variáveis quantitativas relevantes
+
+        Estas proporções descrevem a composição do curso e não entram nos testes.
+        Ingressantes com 25 anos ou mais é a soma das faixas a partir de 25 anos,
+        dividida por `QT_ING`.
+        Pretos ou pardos nas matrículas é
+        (`QT_MAT_PRETA` + `QT_MAT_PARDA`) / (`QT_MAT` − `QT_MAT_CORND`).
+        A cor não declarada fica fora do denominador.
+        Cada curso pesa igual, e os valores estão em percentagem.
+        O desvio-padrão está em pontos percentuais.
+    """)
+    _bloco_quantitativo(populacao, analise.QUANTITATIVAS_EXTRA)
 
 
-def _grades_qualitativas(populacao, amostra=None):
-    for indice in range(0, len(analise.QUALITATIVAS), 2):
-        par = analise.QUALITATIVAS[indice : indice + 2]
-        colunas = st.columns(2)
+def _texto_exclusao(populacao, variaveis, amostra=None):
+    frases = []
+    for variavel in variaveis:
+        motivo = variavel.get("motivo")
+        if not motivo:
+            continue
+        coluna = variavel["coluna"]
+        if amostra is None:
+            fora = int(populacao[coluna].isna().sum())
+            frases.append(
+                f"{variavel['nome']}: {analise.formatar_inteiro(fora)} cursos ficam de fora "
+                f"porque {motivo}."
+            )
+        else:
+            fora_pop = int(populacao[coluna].isna().sum())
+            fora_amo = int(amostra[coluna].isna().sum())
+            frases.append(
+                f"{variavel['nome']}: {analise.formatar_inteiro(fora_pop)} cursos da população "
+                f"e {analise.formatar_inteiro(fora_amo)} da amostra ficam de fora porque {motivo}."
+            )
+    return " ".join(frases)
+
+
+def _legenda_quantitativa(dados, variavel, referencia=None):
+    return nota_cauda(dados, variavel["coluna"], variavel["nome"], referencia)
+
+
+def _bloco_quantitativo(populacao, variaveis, amostra=None, tabela=True):
+    if tabela and amostra is None:
+        st.dataframe(_tabela_medidas(populacao, variaveis), hide_index=True, width="stretch")
+    elif tabela:
+        st.dataframe(
+            tabela_comparacao(amostra, populacao, quantitativas=variaveis, proporcoes=()),
+            hide_index=True,
+            width="stretch",
+        )
+    exclusao = _texto_exclusao(populacao, variaveis, amostra)
+    if amostra is not None and tabela:
+        st.caption(
+            "A diferença é a medida da amostra menos a medida da população. "
+            "Nas proporções, ela está em pontos percentuais. "
+            + exclusao
+        )
+    elif exclusao:
+        st.caption(exclusao)
+    colunas = st.columns(len(variaveis))
+    for coluna_tela, variavel in zip(colunas, variaveis):
+        with coluna_tela:
+            if amostra is None:
+                mostrar(
+                    grafico_histograma(
+                        populacao,
+                        variavel["coluna"],
+                        variavel["nome"],
+                        variavel["nome"],
+                    )
+                )
+                nota = _legenda_quantitativa(populacao, variavel)
+            else:
+                mostrar(
+                    grafico_histograma_comparacao(
+                        populacao,
+                        amostra,
+                        variavel["coluna"],
+                        variavel["nome"],
+                        variavel["nome"],
+                    )
+                )
+                nota = _legenda_quantitativa(amostra, variavel, populacao)
+            if nota:
+                st.caption(nota)
+
+
+def _pares_qualitativos(variaveis):
+    """A área ocupa a linha inteira. As demais variáveis entram em pares."""
+    pares = []
+    indice = 0
+    while indice < len(variaveis):
+        if variaveis[indice][0] == "area" or indice == len(variaveis) - 1:
+            pares.append([variaveis[indice]])
+            indice += 1
+            continue
+        par = variaveis[indice : indice + 2]
+        if par[-1][0] == "area":
+            par = par[:1]
+        pares.append(par)
+        indice += len(par)
+    return pares
+
+
+def _grades_qualitativas(populacao, amostra=None, variaveis=None, com_tabela=True):
+    if variaveis is None:
+        variaveis = analise.QUALITATIVAS
+    for par in _pares_qualitativos(variaveis):
+        colunas = st.columns(len(par))
         for coluna_tela, (coluna, titulo) in zip(colunas, par):
             with coluna_tela:
                 if amostra is None:
@@ -480,7 +639,8 @@ def _grades_qualitativas(populacao, amostra=None):
                     visivel["Proporção"] = visivel["Proporção"].map(
                         lambda valor: analise.formatar_percentual(valor, 1)
                     )
-                    st.dataframe(visivel, hide_index=True, width="stretch")
+                    if com_tabela:
+                        st.dataframe(visivel, hide_index=True, width="stretch")
                 else:
                     pop = analise.frequencia(populacao, coluna).rename(
                         columns={"cursos": "cursos_pop", "proporcao": "prop_pop"}
@@ -494,11 +654,12 @@ def _grades_qualitativas(populacao, amostra=None):
                     junto["cursos_amo"] = junto["cursos_amo"].astype(int)
                     junto = junto.sort_values("prop_pop", ascending=False)
                     mostrar(grafico_barras_comparacao(_longo(junto, coluna), coluna, titulo))
-                    st.dataframe(
-                        _tabela_freq_comparada(junto, coluna),
-                        hide_index=True,
-                        width="stretch",
-                    )
+                    if com_tabela:
+                        st.dataframe(
+                            _tabela_freq_comparada(junto, coluna),
+                            hide_index=True,
+                            width="stretch",
+                        )
 
 
 def painel_amostra(amostra, populacao):
@@ -509,32 +670,35 @@ def painel_amostra(amostra, populacao):
     )
 
     markdown("""
-        ### Variáveis quantitativas
+        ### Variáveis quantitativas da análise
 
-        As curvas usam a mesma escala e mostram a proporção dos cursos em cada faixa,
+        Os histogramas usam a mesma escala e mostram a proporção dos cursos em cada faixa,
         para a população e para a amostra.
     """)
-    colunas = st.columns(2)
-    for coluna_tela, variavel in zip(colunas, analise.QUANTITATIVAS):
-        with coluna_tela:
-            mostrar(
-                grafico_histograma_comparacao(
-                    populacao,
-                    amostra,
-                    variavel["coluna"],
-                    variavel["nome"],
-                    variavel["nome"],
-                )
-            )
-            st.caption(nota_cauda(amostra, variavel["coluna"], variavel["nome"], populacao))
+    _bloco_quantitativo(populacao, analise.QUANTITATIVAS, amostra, tabela=False)
 
     markdown("""
-        ### Variáveis qualitativas
+        ### Variáveis qualitativas da análise
 
         Cada categoria traz a proporção na população e na amostra, lado a lado,
         e a diferença em pontos percentuais.
     """)
-    _grades_qualitativas(populacao, amostra)
+    _grades_qualitativas(populacao, amostra, analise.QUALITATIVAS)
+
+    markdown("""
+        ### Mais variáveis qualitativas relevantes
+
+        A área, o grau e a organização acadêmica repetem a comparação da população.
+    """)
+    _grades_qualitativas(populacao, amostra, analise.QUALITATIVAS_EXTRA, com_tabela=False)
+
+    markdown("""
+        ### Mais variáveis quantitativas relevantes
+
+        As duas proporções seguem as mesmas definições da população.
+        O curso sem ingressante, ou sem cor declarada, fica de fora da respectiva conta.
+    """)
+    _bloco_quantitativo(populacao, analise.QUANTITATIVAS_EXTRA, amostra)
 
 
 def _formatar_resultado(resultado, valor, casas=None):
@@ -547,13 +711,26 @@ def _formatar_resultado(resultado, valor, casas=None):
 
 def texto_conclusao(resultado):
     referencia = resultado["texto_nulo"]
-    if resultado["rejeita"]:
+    nivel = analise.formatar_percentual(analise.ALPHA, 0)
+    lado = resultado.get("lado", "bilateral")
+    if lado == "maior":
+        if resultado["rejeita"]:
+            decisao = (
+                f"Ao nível de {nivel}, rejeita-se $H_0$. "
+                f"A amostra indica que a média não está abaixo de {referencia}."
+            )
+        else:
+            decisao = (
+                f"Ao nível de {nivel}, não se rejeita $H_0$. "
+                f"A amostra não indica que a média deixe de estar abaixo de {referencia}."
+            )
+    elif resultado["rejeita"]:
         decisao = (
-            f"Ao nível de 5%, rejeita-se $H_0$. A amostra indica que o parâmetro difere de {referencia}."
+            f"Ao nível de {nivel}, rejeita-se $H_0$. A amostra indica que o parâmetro difere de {referencia}."
         )
     else:
         decisao = (
-            "Ao nível de 5%, não se rejeita $H_0$. "
+            f"Ao nível de {nivel}, não se rejeita $H_0$. "
             f"A amostra não indica diferença em relação a {referencia}."
         )
     cobertura = (
@@ -580,7 +757,7 @@ def texto_conclusao(resultado):
     parametro = _formatar_resultado(resultado, resultado["parametro"])
     return em_markdown(f"""
         A estimativa é {estimativa}
-        e o intervalo de 95% vai de {inferior}
+        e o intervalo de {analise.formatar_percentual(analise.CONFIANCA, 0)} vai de {inferior}
         a {superior}.
         O parâmetro populacional é {parametro}.
         {cobertura} {distancia} {decisao} {resultado['acordo']}
@@ -595,7 +772,7 @@ def tabela_inferencia(resultados):
                 "Parâmetro": item["nome"],
                 "População": _formatar_resultado(item, item["parametro"]),
                 "Estimativa": _formatar_resultado(item, item["estimativa"]),
-                "Intervalo de 95%": (
+                f"Intervalo de {analise.formatar_percentual(analise.CONFIANCA, 0)}": (
                     f"[{_formatar_resultado(item, item['inferior'])}; "
                     f"{_formatar_resultado(item, item['superior'])}]"
                 ),

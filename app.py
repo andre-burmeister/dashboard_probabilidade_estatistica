@@ -40,11 +40,12 @@ def pagina_inicial():
         ### População e unidade amostral
 
         A unidade amostral é o **curso**. A população reúne os cursos de graduação
-        presenciais com ao menos um aluno matriculado e ao menos uma vaga em 2024
-        (`TP_MODALIDADE_ENSINO = 1`, `QT_MAT > 0` e `QT_VG_TOTAL > 0`):
+        presenciais com ao menos um aluno matriculado em 2024
+        (`TP_MODALIDADE_ENSINO = 1` e `QT_MAT > 0`):
         **{analise.formatar_inteiro(plano['N'])} cursos**. Cada elemento da população
-        é um curso presencial comparável. O curso sem vaga fica de fora porque
-        inscritos por vaga não existe quando o denominador é zero.
+        é um curso presencial com matrícula. A proporção de mulheres do curso é
+        `QT_MAT_FEM / QT_MAT`, e o curso sem matrícula fica de fora porque essa
+        razão não existe quando o denominador é zero.
 
         ### Variáveis
 
@@ -52,8 +53,8 @@ def pagina_inicial():
 
         Quatro variáveis entram na inferência. Duas são características do curso:
         grau de licenciatura e gratuidade.
-        Duas são quantidades do próprio curso: o número de matrículas e o número
-        de inscritos por vaga (`QT_INSCRITO_TOTAL / QT_VG_TOTAL`).
+        Duas descrevem o tamanho e a composição do curso: o número de matrículas
+        e a proporção de mulheres nas matrículas (`QT_MAT_FEM / QT_MAT`).
     """)
     variaveis = [
         {
@@ -75,10 +76,10 @@ def pagina_inicial():
             "Definição por variável": "QT_MAT",
         },
         {
-            "Parâmetro": "Inscritos por vaga",
+            "Parâmetro": "Proporção de mulheres",
             "Tipo": "Média",
-            "Definição": "Inscritos no processo seletivo divididos pelas vagas do curso",
-            "Definição por variável": "QT_INSCRITO_TOTAL / QT_VG_TOTAL",
+            "Definição": "Mulheres matriculadas divididas pelas matrículas do curso",
+            "Definição por variável": "QT_MAT_FEM / QT_MAT",
         },
     ]
     st.dataframe(variaveis, hide_index=True, width="stretch")
@@ -104,8 +105,7 @@ def pagina_inicial():
         Onde:
 
         - $p = {analise.formatar_decimal(plano['p'], 2)}$ é a **Proporção de planejamento** (no cálculo do tamanho, 0,50 maximiza $p(1-p)$ e produz a maior amostra).
-        - $z = {analise.formatar_decimal(plano['z'], 2)}$ é o valor crítico da distribuição normal padrão para o **Nível de confiança de {analise.formatar_percentual(plano['confianca'], 0)}**.
-          com o nível de significância de 5% dos testes.
+        - $z = {analise.formatar_decimal(plano['z'], 2)}$ é o valor crítico da distribuição normal padrão para o **nível de confiança de {analise.formatar_percentual(plano['confianca'], 0)}**. O nível de significância dos testes é {analise.formatar_percentual(plano['alpha'], 0)}, o complemento dessa confiança.
         - $E = {analise.formatar_percentual(plano['erro'], 0)}$ é a **Margem de erro** (fixa antes de ver a amostra).
         - $N = {analise.formatar_inteiro(plano['N'])}$ é o **Tamanho da população** (a população tem tamanho conhecido e a amostra sai sem reposição, então o tamanho é ajustado por $N$).
 
@@ -118,6 +118,8 @@ def pagina_inicial():
         $$
 
         O tamanho da amostra resultante é de **{analise.formatar_inteiro(plano['n'])}** cursos.
+
+        A confiança de {analise.formatar_percentual(plano['confianca'], 0)} e a margem de {analise.formatar_percentual(plano['erro'], 0)} foram escolhidas para gerar uma amostra menor, com possíveis diferenças mais marcantes em relação à população. Com menos cursos, a variabilidade amostral aumenta e a estimativa pode se afastar mais do parâmetro. Essa distância é o que os painéis seguintes comparam.
 
 
         O sorteio da amostra é realizado utilizando o `numpy.random.Generator`, iniciado com a semente

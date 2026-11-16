@@ -25,11 +25,14 @@ markdown(fr"""
     {analise.formatar_inteiro(plano['N'])} cursos.
     Os intervalos e os testes usam só os
     {analise.formatar_inteiro(plano['n'])} cursos da amostra.
-    O nível de significância é 5%, e os intervalos têm confiança de 95%.
+    O nível de significância é {analise.formatar_percentual(plano['alpha'], 0)}, e os intervalos têm confiança de {analise.formatar_percentual(plano['confianca'], 0)}.
 
     Para as proporções, o intervalo é o de Wald e o teste é o $z$ bilateral.
-    Para as médias, o intervalo e o teste são $t$ de Student, com
+    Para as médias, o intervalo é $t$ de Student, com
     {analise.formatar_inteiro(plano['n'] - 1)} graus de liberdade.
+    O teste da proporção de mulheres também é bilateral.
+    O teste das matrículas é unilateral: $H_0$ afirma que a média está abaixo de 150,
+    e só uma média amostral suficientemente alta a rejeita.
     O erro-padrão dos dois casos leva a correção de população finita,
     {analise.formatar_decimal(fpc, 3)}.
 
@@ -40,24 +43,40 @@ markdown(fr"""
     $$
 
     No intervalo da proporção, o erro-padrão troca $p_0$ por $\hat{{p}}$
-    e o quantil é $z$ = 1,96.
+    e o quantil é $z$ = {analise.formatar_decimal(plano['z'], 2)}.
     No intervalo da média, o quantil é o da distribuição $t$.
 """)
 
 proporcoes = [item for item in resultados if item["tipo"] == "proporcao"]
 medias = [item for item in resultados if item["tipo"] == "media"]
-mostrar(grafico_intervalos(proporcoes, 0.5, "%", "Proporção dos cursos"))
-st.caption(
-    "A barra é o intervalo de 95%. O círculo é a estimativa amostral. "
-    "O losango é o parâmetro populacional. A linha tracejada é a hipótese nula, em 50%."
-)
+for indice, proporcao in enumerate(proporcoes):
+    mostrar(grafico_intervalos([proporcao], proporcao["valor_nulo"], "%", "Proporção dos cursos"))
+    legenda = ""
+    if indice == 0:
+        legenda = (
+            f"A barra é o intervalo de {analise.formatar_percentual(plano['confianca'], 0)}. "
+            "O círculo verde é a estimativa amostral. "
+            "O losango vermelho é o parâmetro populacional. "
+        )
+    st.caption(legenda + f"A linha tracejada é a hipótese nula, em {proporcao['texto_nulo']}.")
 for media in medias:
-    formato = ",.0f" if media["coluna"] == "QT_MAT" else ",.2f"
+    if media["percentual"]:
+        formato = ".1%"
+    elif media["coluna"] == "QT_MAT":
+        formato = ",.0f"
+    else:
+        formato = ",.2f"
     mostrar(grafico_intervalos([media], media["valor_nulo"], formato, media["nome"]))
-    st.caption(
-        "A linha tracejada é a hipótese nula, em "
-        f"{media['texto_nulo']}."
-    )
+    if media.get("lado") == "maior":
+        st.caption(
+            "A linha tracejada é o limite da hipótese nula, em "
+            f"{media['texto_nulo']}. À esquerda dela, a média fica abaixo de 150 e H0 se mantém."
+        )
+    else:
+        st.caption(
+            "A linha tracejada é a hipótese nula, em "
+            f"{media['texto_nulo']}."
+        )
 st.dataframe(tabela_inferencia(resultados), hide_index=True, width="stretch")
 
 for resultado in resultados:
@@ -74,7 +93,7 @@ for resultado in resultados:
     c1.metric("População", analise.formatar_parametro(resultado["parametro"], resultado["percentual"], resultado["casas"]))
     c2.metric("Estimativa", analise.formatar_parametro(resultado["estimativa"], resultado["percentual"], resultado["casas"]))
     c3.metric(
-        "Intervalo de 95%",
+        f"Intervalo de {analise.formatar_percentual(plano['confianca'], 0)}",
         (
             f"{analise.formatar_parametro(resultado['inferior'], resultado['percentual'], resultado['casas'])} a "
             f"{analise.formatar_parametro(resultado['superior'], resultado['percentual'], resultado['casas'])}"
@@ -86,16 +105,34 @@ for resultado in resultados:
             Sucessos na amostra: {analise.formatar_inteiro(resultado['sucessos'])}
             de {analise.formatar_inteiro(resultado['n'])} cursos.
             Estatística $z$ = {analise.formatar_decimal(resultado['estatistica'], 2)}.
+            O valor crítico bilateral é {analise.formatar_decimal(resultado['critico'], 2)}.
+            Rejeita-se $H_0$ se $|z|$ passar desse valor.
             Erro-padrão do intervalo = {analise.formatar_decimal(resultado['erro_padrao'], 4)}.
             Erro-padrão sob $H_0$ = {analise.formatar_decimal(resultado['erro_padrao_h0'], 4)}.
         """
     else:
+        if resultado["percentual"]:
+            desvio = f"{analise.formatar_decimal(resultado['desvio'] * 100, 1)} pontos percentuais"
+            erro = f"{analise.formatar_decimal(resultado['erro_padrao'] * 100, 2)} pontos percentuais"
+        else:
+            desvio = analise.formatar_decimal(resultado["desvio"], 3)
+            erro = analise.formatar_decimal(resultado["erro_padrao"], 4)
+        if resultado.get("lado") == "maior":
+            regra = (
+                f"O valor crítico unilateral é {analise.formatar_decimal(resultado['critico'], 3)}. "
+                "Rejeita-se $H_0$ se $t$ passar desse valor."
+            )
+        else:
+            regra = (
+                f"O valor crítico bilateral é {analise.formatar_decimal(resultado['critico'], 3)}. "
+                "Rejeita-se $H_0$ se $|t|$ passar desse valor."
+            )
         detalhe = f"""
-            Desvio-padrão amostral = {analise.formatar_decimal(resultado['desvio'], 3)}.
+            Desvio-padrão amostral = {desvio}.
             Estatística $t$ = {analise.formatar_decimal(resultado['estatistica'], 2)},
-            com {analise.formatar_inteiro(resultado['graus_liberdade'])} graus de liberdade
-            e valor crítico {analise.formatar_decimal(resultado['critico'], 3)}.
-            Erro-padrão = {analise.formatar_decimal(resultado['erro_padrao'], 4)}.
+            com {analise.formatar_inteiro(resultado['graus_liberdade'])} graus de liberdade.
+            {regra}
+            Erro-padrão = {erro}.
         """
     markdown(f"""
         {em_markdown(detalhe)}
@@ -108,24 +145,16 @@ for resultado in resultados:
 markdown(f"""
     ### Limitações
 
-    As matrículas e os inscritos por vaga são assimétricos. Alguns cursos muito
-    grandes, ou com muitos inscritos para poucas vagas, puxam a média para cima
-    da mediana. O intervalo e o teste descrevem essa média. A mediana, no painel
-    descritivo, acompanha o curso típico.
+    As matrículas são assimétricas. Alguns cursos muito grandes puxam a média
+    para cima da mediana. O intervalo e o teste descrevem essa média. A mediana,
+    no painel descritivo, acompanha o curso típico.
 
-    Cursos presenciais sem vaga registrada ficam fora da população, porque
-    inscritos por vaga não existe quando o denominador é zero.
+    A proporção de mulheres varia de 0% a 100% e a assimetria é leve. A média
+    fica perto da mediana. Cada curso pesa igual nessa média. A proporção de
+    mulheres entre todas as matrículas, somando os alunos, é outra conta, porque
+    os cursos grandes pesam mais.
 
-    O intervalo de Wald e o teste $z$ usam a aproximação normal. Com mais de mil
-    cursos e proporções longe de 0 e de 1, $np$ e $n(1-p)$ ficam folgados.
-    O intervalo $t$ usa o desvio-padrão amostral $s$. A correção de população finita
-    vale {analise.formatar_decimal(fpc, 3)}, perto de 1, porque a amostra é
-    uma fração pequena da população.
+    Cursos presenciais sem matrícula ficam fora da população, porque a proporção
+    de mulheres não existe quando `QT_MAT` é zero.
 
-    Os quatro procedimentos usam a mesma amostra. A estimativa muda se o sorteio
-    mudar, e o intervalo é a faixa compatível com essa variabilidade.
-    Como a população está disponível, dá para ver se o intervalo a contém e se
-    a decisão do teste coincide com o parâmetro conhecido.
-    A educação a distância não entra nesta população. O recorte usa a modalidade
-    presencial, `TP_MODALIDADE_ENSINO = 1`.
 """)
