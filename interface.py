@@ -469,22 +469,27 @@ def _tabela_freq_comparada(tabela, coluna):
     ]
 
 
-def painel_populacao(populacao):
-    matriculas = int(populacao["QT_MAT"].sum())
-    media_mat = float(populacao["QT_MAT"].mean())
-    mediana_mat = float(populacao["QT_MAT"].median())
-    media_mulheres = float(populacao["proporcao_mulheres"].mean())
-    mediana_mulheres = float(populacao["proporcao_mulheres"].median())
+def indicadores(dados):
+    """Os oito números do topo, iguais na população e na amostra."""
+    matriculas = int(dados["QT_MAT"].sum())
+    media_mat = float(dados["QT_MAT"].mean())
+    mediana_mat = float(dados["QT_MAT"].median())
+    media_mulheres = float(dados["proporcao_mulheres"].mean())
+    mediana_mulheres = float(dados["proporcao_mulheres"].median())
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Cursos", analise.formatar_inteiro(len(populacao)))
+    c1.metric("Cursos", analise.formatar_inteiro(len(dados)))
     c2.metric("Matrículas", analise.formatar_inteiro(matriculas))
     c3.metric("Média de matrículas", analise.formatar_decimal(media_mat, 1))
     c4.metric("Mediana de matrículas", analise.formatar_decimal(mediana_mat, 0))
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Licenciatura", analise.formatar_percentual(populacao["licenciatura"].mean(), 1))
-    c6.metric("Gratuitos", analise.formatar_percentual(populacao["gratuito"].mean(), 1))
+    c5.metric("Licenciatura", analise.formatar_percentual(dados["licenciatura"].mean(), 1))
+    c6.metric("Gratuitos", analise.formatar_percentual(dados["gratuito"].mean(), 1))
     c7.metric("Proporção média de mulheres", analise.formatar_percentual(media_mulheres, 1))
     c8.metric("Proporção mediana de mulheres", analise.formatar_percentual(mediana_mulheres, 1))
+
+
+def painel_populacao(populacao):
+    indicadores(populacao)
     markdown("""
         ## Variáveis quantitativas da análise
 
@@ -663,6 +668,7 @@ def _grades_qualitativas(populacao, amostra=None, variaveis=None, com_tabela=Tru
 
 
 def painel_amostra(amostra, populacao):
+    indicadores(amostra)
     st.dataframe(tabela_comparacao(amostra, populacao), hide_index=True, width="stretch")
     st.caption(
         "A diferença é a medida da amostra menos a medida da população. "
