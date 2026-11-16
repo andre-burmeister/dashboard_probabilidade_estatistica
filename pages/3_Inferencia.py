@@ -47,39 +47,78 @@ markdown(fr"""
     No intervalo da média, o quantil é o da distribuição $t$.
 """)
 
-proporcoes = [item for item in resultados if item["tipo"] == "proporcao"]
-medias = [item for item in resultados if item["tipo"] == "media"]
-for indice, proporcao in enumerate(proporcoes):
-    mostrar(grafico_intervalos([proporcao], proporcao["valor_nulo"], "%", "Proporção dos cursos"))
-    legenda = ""
-    if indice == 0:
-        legenda = (
+def _formato_grafico(resultado):
+    if resultado["tipo"] == "proporcao":
+        return "%", "Proporção dos cursos"
+    if resultado["percentual"]:
+        return ".1%", resultado["nome"]
+    if resultado["coluna"] == "QT_MAT":
+        return ",.0f", resultado["nome"]
+    return ",.2f", resultado["nome"]
+
+
+def _legenda_grafico(resultado, explicar):
+    partes = []
+    if explicar:
+        partes.append(
             f"A barra é o intervalo de {analise.formatar_percentual(plano['confianca'], 0)}. "
             "O círculo verde é a estimativa amostral. "
             "O losango vermelho é o parâmetro populacional. "
         )
-    st.caption(legenda + f"A linha tracejada é a hipótese nula, em {proporcao['texto_nulo']}.")
-for media in medias:
-    if media["percentual"]:
-        formato = ".1%"
-    elif media["coluna"] == "QT_MAT":
-        formato = ",.0f"
-    else:
-        formato = ",.2f"
-    mostrar(grafico_intervalos([media], media["valor_nulo"], formato, media["nome"]))
-    if media.get("lado") == "maior":
-        st.caption(
+    if resultado.get("lado") == "maior":
+        partes.append(
             "A linha tracejada é o limite da hipótese nula, em "
-            f"{media['texto_nulo']}. À esquerda dela, a média fica abaixo de 150 e H0 se mantém."
+            f"{resultado['texto_nulo']}. À esquerda dela, a média fica abaixo de 150 e H0 se mantém."
         )
     else:
-        st.caption(
-            "A linha tracejada é a hipótese nula, em "
-            f"{media['texto_nulo']}."
-        )
-st.dataframe(tabela_inferencia(resultados), hide_index=True, width="stretch")
+        partes.append(f"A linha tracejada é a hipótese nula, em {resultado['texto_nulo']}.")
+    return "".join(partes)
 
+
+def _detalhe(resultado):
+    if resultado["tipo"] == "proporcao":
+        return f"""
+            Sucessos na amostra: {analise.formatar_inteiro(resultado['sucessos'])}
+            de {analise.formatar_inteiro(resultado['n'])} cursos.
+            Estatística $z$ = {analise.formatar_decimal(resultado['estatistica'], 2)}.
+            O valor crítico bilateral é {analise.formatar_decimal(resultado['critico'], 2)}.
+            Rejeita-se $H_0$ se $|z|$ passar desse valor.
+            Erro-padrão do intervalo = {analise.formatar_decimal(resultado['erro_padrao'], 4)}.
+            Erro-padrão sob $H_0$ = {analise.formatar_decimal(resultado['erro_padrao_h0'], 4)}.
+        """
+    if resultado["percentual"]:
+        desvio = f"{analise.formatar_decimal(resultado['desvio'] * 100, 1)} pontos percentuais"
+        erro = f"{analise.formatar_decimal(resultado['erro_padrao'] * 100, 2)} pontos percentuais"
+    else:
+        desvio = analise.formatar_decimal(resultado["desvio"], 3)
+        erro = analise.formatar_decimal(resultado["erro_padrao"], 4)
+    if resultado.get("lado") == "maior":
+        regra = (
+            f"O valor crítico unilateral é {analise.formatar_decimal(resultado['critico'], 3)}. "
+            "Rejeita-se $H_0$ se $t$ passar desse valor."
+        )
+    else:
+        regra = (
+            f"O valor crítico bilateral é {analise.formatar_decimal(resultado['critico'], 3)}. "
+            "Rejeita-se $H_0$ se $|t|$ passar desse valor."
+        )
+    return f"""
+        Desvio-padrão amostral = {desvio}.
+        Estatística $t$ = {analise.formatar_decimal(resultado['estatistica'], 2)},
+        com {analise.formatar_inteiro(resultado['graus_liberdade'])} graus de liberdade.
+        {regra}
+        Erro-padrão = {erro}.
+    """
+
+
+primeira_proporcao = True
 for resultado in resultados:
+    formato, titulo = _formato_grafico(resultado)
+    mostrar(grafico_intervalos([resultado], resultado["valor_nulo"], formato, titulo))
+    explicar = resultado["tipo"] == "proporcao" and primeira_proporcao
+    st.caption(_legenda_grafico(resultado, explicar))
+    if explicar:
+        primeira_proporcao = False
     markdown(f"""
         ### {resultado['nome']}
 
@@ -100,47 +139,15 @@ for resultado in resultados:
         ),
     )
     c4.metric("Valor-p", analise.formatar_valor_p(resultado["valor_p"]))
-    if resultado["tipo"] == "proporcao":
-        detalhe = f"""
-            Sucessos na amostra: {analise.formatar_inteiro(resultado['sucessos'])}
-            de {analise.formatar_inteiro(resultado['n'])} cursos.
-            Estatística $z$ = {analise.formatar_decimal(resultado['estatistica'], 2)}.
-            O valor crítico bilateral é {analise.formatar_decimal(resultado['critico'], 2)}.
-            Rejeita-se $H_0$ se $|z|$ passar desse valor.
-            Erro-padrão do intervalo = {analise.formatar_decimal(resultado['erro_padrao'], 4)}.
-            Erro-padrão sob $H_0$ = {analise.formatar_decimal(resultado['erro_padrao_h0'], 4)}.
-        """
-    else:
-        if resultado["percentual"]:
-            desvio = f"{analise.formatar_decimal(resultado['desvio'] * 100, 1)} pontos percentuais"
-            erro = f"{analise.formatar_decimal(resultado['erro_padrao'] * 100, 2)} pontos percentuais"
-        else:
-            desvio = analise.formatar_decimal(resultado["desvio"], 3)
-            erro = analise.formatar_decimal(resultado["erro_padrao"], 4)
-        if resultado.get("lado") == "maior":
-            regra = (
-                f"O valor crítico unilateral é {analise.formatar_decimal(resultado['critico'], 3)}. "
-                "Rejeita-se $H_0$ se $t$ passar desse valor."
-            )
-        else:
-            regra = (
-                f"O valor crítico bilateral é {analise.formatar_decimal(resultado['critico'], 3)}. "
-                "Rejeita-se $H_0$ se $|t|$ passar desse valor."
-            )
-        detalhe = f"""
-            Desvio-padrão amostral = {desvio}.
-            Estatística $t$ = {analise.formatar_decimal(resultado['estatistica'], 2)},
-            com {analise.formatar_inteiro(resultado['graus_liberdade'])} graus de liberdade.
-            {regra}
-            Erro-padrão = {erro}.
-        """
     markdown(f"""
-        {em_markdown(detalhe)}
+        {em_markdown(_detalhe(resultado))}
 
         {resultado['condicoes']}
 
         {texto_conclusao(resultado)}
     """)
+
+st.dataframe(tabela_inferencia(resultados), hide_index=True, width="stretch")
 
 markdown(f"""
     ### Limitações
