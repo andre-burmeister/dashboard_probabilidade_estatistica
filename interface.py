@@ -719,55 +719,27 @@ def texto_conclusao(resultado):
     referencia = resultado["texto_nulo"]
     nivel = analise.formatar_percentual(analise.ALPHA, 0)
     lado = resultado.get("lado", "bilateral")
-    if lado == "maior":
-        if resultado["rejeita"]:
-            decisao = (
-                f"Ao nível de {nivel}, rejeita-se $H_0$. "
-                f"A amostra indica que a média não está abaixo de {referencia}."
-            )
-        else:
-            decisao = (
-                f"Ao nível de {nivel}, não se rejeita $H_0$. "
-                f"A amostra não indica que a média deixe de estar abaixo de {referencia}."
-            )
+    if lado == "maior" and resultado["rejeita"]:
+        decisao = (
+            f"Ao nível de {nivel}, rejeita-se $H_0$: "
+            f"a amostra indica que a média não está abaixo de {referencia}."
+        )
+    elif lado == "maior":
+        decisao = (
+            f"Ao nível de {nivel}, não se rejeita $H_0$: "
+            f"a amostra não afasta a ideia de que a média está abaixo de {referencia}."
+        )
     elif resultado["rejeita"]:
         decisao = (
-            f"Ao nível de {nivel}, rejeita-se $H_0$. A amostra indica que o parâmetro difere de {referencia}."
+            f"Ao nível de {nivel}, rejeita-se $H_0$: "
+            f"a amostra indica que o parâmetro difere de {referencia}."
         )
     else:
         decisao = (
-            f"Ao nível de {nivel}, não se rejeita $H_0$. "
-            f"A amostra não indica diferença em relação a {referencia}."
+            f"Ao nível de {nivel}, não se rejeita $H_0$: "
+            f"a amostra não indica diferença em relação a {referencia}."
         )
-    cobertura = (
-        "O intervalo contém o parâmetro populacional."
-        if resultado["cobre"]
-        else "O intervalo não contém o parâmetro populacional."
-    )
-    diferenca = resultado["estimativa"] - resultado["parametro"]
-    if resultado["percentual"]:
-        pontos = analise.formatar_decimal(abs(diferenca) * 100, 2)
-        unidade = "pontos percentuais"
-    else:
-        pontos = analise.formatar_decimal(abs(diferenca), resultado["casas"])
-        unidade = resultado["unidade"]
-    if diferenca > 0:
-        distancia = f"A estimativa fica {pontos} {unidade} acima do parâmetro."
-    elif diferenca < 0:
-        distancia = f"A estimativa fica {pontos} {unidade} abaixo do parâmetro."
-    else:
-        distancia = "A estimativa coincide com o parâmetro."
-    estimativa = _formatar_resultado(resultado, resultado["estimativa"])
-    inferior = _formatar_resultado(resultado, resultado["inferior"])
-    superior = _formatar_resultado(resultado, resultado["superior"])
-    parametro = _formatar_resultado(resultado, resultado["parametro"])
-    return em_markdown(f"""
-        A estimativa é {estimativa}
-        e o intervalo de {analise.formatar_percentual(analise.CONFIANCA, 0)} vai de {inferior}
-        a {superior}.
-        O parâmetro populacional é {parametro}.
-        {cobertura} {distancia} {decisao} {resultado['acordo']}
-    """)
+    return em_markdown(f"{decisao} {resultado['acordo']}")
 
 
 def tabela_inferencia(resultados):

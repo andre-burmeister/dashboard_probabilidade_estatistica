@@ -224,44 +224,34 @@ def _decisao(parametro, valor_nulo, valor_p, alpha, texto_nulo, lado="bilateral"
         h0_verdadeira = parametro < valor_nulo
         if h0_verdadeira and rejeita:
             acordo = (
-                f"Na população a média está abaixo de {texto_nulo} e o teste rejeitou $H_0$. "
+                f"Na população a média está abaixo de {texto_nulo}. "
                 "Esta amostra produziu um falso positivo."
             )
         elif h0_verdadeira and not rejeita:
-            acordo = (
-                f"Na população a média está abaixo de {texto_nulo} "
-                "e o teste não rejeitou $H_0$."
-            )
+            acordo = f"Na população a média também está abaixo de {texto_nulo}."
         elif rejeita:
-            acordo = (
-                f"Na população a média não está abaixo de {texto_nulo}. "
-                "A decisão do teste coincide com o parâmetro populacional."
-            )
+            acordo = f"Na população a média também não está abaixo de {texto_nulo}."
         else:
             acordo = (
                 f"Na população a média não está abaixo de {texto_nulo}, "
-                "mas esta amostra não rejeitou $H_0$. "
-                "A diferença ficou dentro da variabilidade amostral."
+                "mas a diferença ficou na variabilidade amostral."
             )
         return rejeita, acordo
     populacao_difere = abs(parametro - valor_nulo) > 1e-9
     if populacao_difere and rejeita:
-        acordo = (
-            f"A população também difere de {texto_nulo}. "
-            "A decisão do teste coincide com o parâmetro populacional."
-        )
+        acordo = f"A população também difere de {texto_nulo}."
     elif populacao_difere and not rejeita:
         acordo = (
-            f"A população difere de {texto_nulo}, mas esta amostra não rejeitou $H_0$. "
-            "A diferença ficou dentro da variabilidade amostral."
+            f"A população difere de {texto_nulo}, "
+            "mas a diferença ficou na variabilidade amostral."
         )
     elif not populacao_difere and rejeita:
         acordo = (
-            f"Na população o parâmetro é {texto_nulo} e o teste rejeitou $H_0$. "
+            f"Na população o parâmetro é {texto_nulo}. "
             "Esta amostra produziu um falso positivo."
         )
     else:
-        acordo = f"Na população o parâmetro é {texto_nulo} e o teste não rejeitou $H_0$."
+        acordo = f"Na população o parâmetro também é {texto_nulo}."
     return rejeita, acordo
 
 
